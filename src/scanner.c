@@ -188,6 +188,7 @@ bool tree_sitter_kotlin_external_scanner_scan(void *payload, TSLexer *lexer, con
             case '=':
             case '{':
             case '[':
+            case '(':
             case '|':
             case '&':
             case '/':

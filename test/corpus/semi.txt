@@ -179,6 +179,29 @@ public class Foo
             (identifier))
           (number_literal))))))
 
+=====================================================
+Bare primary constructor parenthesis on a new line
+=====================================================
+
+class Foo
+    (
+    private val bar: Int,
+)
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (primary_constructor
+      (class_parameters
+        (class_parameter
+          (modifiers
+            (visibility_modifier))
+          (identifier)
+          (user_type
+            (identifier)))))))
+
 ====================================
 Secondary Constructor on a newline
 ====================================
