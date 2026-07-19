@@ -293,7 +293,7 @@ bool tree_sitter_kotlin_external_scanner_scan(void *payload, TSLexer *lexer, con
     bool context_type = valid_symbols[CONTEXT_TYPE_KW];
     if ((context_decl || context_type) && !valid_symbols[SEMI] && !valid_symbols[CLASS_MEMBER_SEMI]) {
         while (iswspace(lexer->lookahead)) {
-            advance(lexer);
+            skip(lexer);
         }
         bool matches = lexer->lookahead == 'c';
         if (matches) {
