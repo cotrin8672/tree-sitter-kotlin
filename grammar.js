@@ -24,11 +24,6 @@ module.exports = grammar({
   conflicts: $ => [
     [$.class_body, $.enum_class_body],
 
-    [$.binary_expression, $.call_expression],
-    [$.binary_expression, $.in_expression, $.call_expression],
-    [$.binary_expression, $.infix_expression, $.call_expression],
-    [$.binary_expression, $.range_expression, $.call_expression],
-
     [$.user_type],
     [$._simple_user_type, $.primary_expression],
     [$.type, $._receiver_type],
@@ -85,6 +80,11 @@ module.exports = grammar({
     'set',
     // used to check if we can parse a comment
     '$',
+    // `<` that opens call-site type arguments (`f<T>(x)`), verified by lookahead
+    $._generic_lt,
+    // `context` that opens a context-parameters clause, verified by lookahead
+    $._context_kw,
+    $._context_type_kw,
   ],
 
   inline: $ => [
@@ -175,6 +175,7 @@ module.exports = grammar({
 
     property_declaration: $ => prec.right(seq(
       optional($.modifiers),
+      optional($.context_parameters),
       choice('val', 'var'),
       optional($.type_parameters),
       optional(seq($._receiver_type, optional('.'))),
@@ -264,8 +265,29 @@ module.exports = grammar({
 
     constructor_invocation: $ => seq($.type, $.value_arguments),
 
+    // Context parameters (KEEP-0259): `context(ctx: A, B)` before fun/val declarations and
+    // in function types (`suspend context(A) () -> R`). Both keyword tokens are
+    // scanner-verified so `context(...)` calls are never misread as clauses: `_context_kw`
+    // for declaration positions (a named fun/val/var must follow), `_context_type_kw` for
+    // function-type and anonymous-function positions (a function-type tail or an
+    // anonymous `fun` must follow).
+    context_parameters: $ => seq(
+      $._context_kw,
+      '(',
+      optionalCommaSep1(choice($.parameter, $.type)),
+      ')',
+    ),
+
+    context_type_parameters: $ => seq(
+      $._context_type_kw,
+      '(',
+      optionalCommaSep1(choice($.parameter, $.type)),
+      ')',
+    ),
+
     function_declaration: $ => prec.right(1, seq(
       optional($.modifiers),
+      optional($.context_parameters),
       'fun',
       optional($.type_parameters),
       optional(seq($._receiver_type, optional('.'))),
@@ -593,6 +615,7 @@ module.exports = grammar({
 
     function_type: $ => seq(
       optional($.type_modifiers),
+      optional(alias($.context_type_parameters, $.context_parameters)),
       optional(seq($._receiver_type, '.')),
       $.function_type_parameters,
       '->',
@@ -738,12 +761,16 @@ module.exports = grammar({
 
     call_expression: $ => prec.left(PREC.CALL, seq(
       $.expression,
-      optional($.type_arguments),
+      optional(alias($.call_type_arguments, $.type_arguments)),
       choice(
         $.value_arguments,
         seq(optional($.value_arguments), $.annotated_lambda),
       ),
     )),
+
+    // Type arguments after an expression (`f<T>(x)`) use a scanner-verified `<` so the
+    // source is never reinterpreted as the comparison chain `(f < T) > (x)`.
+    call_type_arguments: $ => seq($._generic_lt, commaSep1($.type_projection), '>'),
 
     annotated_lambda: $ => seq(
       repeat($.annotation),
@@ -766,6 +793,7 @@ module.exports = grammar({
     ),
 
     anonymous_function: $ => prec.right(seq(
+      optional(alias($.context_type_parameters, $.context_parameters)),
       'fun',
       optional(seq($.type, '.')),
       $.function_value_parameters,

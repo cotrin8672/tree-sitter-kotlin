@@ -15,6 +15,9 @@ enum TokenType {
     GET,
     SET,
     DOLLAR,
+    GENERIC_LT,
+    CONTEXT_KW,
+    CONTEXT_TYPE_KW,
 };
 
 #define MAX_WORD_SIZE 16
@@ -23,6 +26,219 @@ enum TokenType {
 static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
+
+// Skip whitespace and both comment forms (lookahead only).
+static void skip_trivia(TSLexer *lexer) {
+    for (;;) {
+        if (iswspace(lexer->lookahead)) {
+            advance(lexer);
+            continue;
+        }
+        if (lexer->lookahead == '/') {
+            advance(lexer);
+            if (lexer->lookahead == '/') {
+                while (!lexer->eof(lexer) && lexer->lookahead != '\n') {
+                    advance(lexer);
+                }
+                continue;
+            }
+            if (lexer->lookahead == '*') {
+                advance(lexer);
+                unsigned depth = 1;
+                while (!lexer->eof(lexer) && depth > 0) {
+                    if (lexer->lookahead == '*') {
+                        advance(lexer);
+                        if (lexer->lookahead == '/') {
+                            advance(lexer);
+                            depth--;
+                        }
+                    } else if (lexer->lookahead == '/') {
+                        advance(lexer);
+                        if (lexer->lookahead == '*') {
+                            advance(lexer);
+                            depth++;
+                        }
+                    } else {
+                        advance(lexer);
+                    }
+                }
+                continue;
+            }
+            return;
+        }
+        return;
+    }
+}
+
+// Scan a balanced parenthesized region (the cursor is at the opening `(`). Allows anything
+// types and parameter lists may contain; bails on quotes/braces/semicolons/eof.
+static bool scan_balanced_parens(TSLexer *lexer, unsigned cap) {
+    unsigned depth = 0;
+    unsigned scanned = 0;
+    while (!lexer->eof(lexer) && scanned++ < cap) {
+        int32_t c = lexer->lookahead;
+        if (c == '(') {
+            depth++;
+            advance(lexer);
+            continue;
+        }
+        if (c == ')') {
+            depth--;
+            advance(lexer);
+            if (depth == 0) {
+                return true;
+            }
+            continue;
+        }
+        if (c == '{' || c == '}' || c == ';' || c == '"' || c == '\'') {
+            return false;
+        }
+        advance(lexer);
+    }
+    return false;
+}
+
+static bool scan_word_at(TSLexer *lexer, const char *word) {
+    for (uint8_t i = 0; word[i] != '\0'; i++) {
+        if (lexer->lookahead != word[i]) {
+            return false;
+        }
+        advance(lexer);
+    }
+    return !iswalnum(lexer->lookahead) && lexer->lookahead != '_';
+}
+
+// After `fun`, decide whether an anonymous function follows: `(`, type parameters, or a
+// receiver (`T.()`) are anonymous; a plain name is a named declaration.
+static bool scan_anonymous_fun_tail(TSLexer *lexer) {
+    skip_trivia(lexer);
+    if (lexer->lookahead == '(') {
+        return true;
+    }
+    if (lexer->lookahead == '<') {
+        unsigned depth = 0;
+        unsigned scanned = 0;
+        while (!lexer->eof(lexer) && scanned++ < 1024) {
+            if (lexer->lookahead == '<') {
+                depth++;
+            } else if (lexer->lookahead == '>') {
+                depth--;
+                if (depth == 0) {
+                    advance(lexer);
+                    skip_trivia(lexer);
+                    return lexer->lookahead == '(';
+                }
+            }
+            advance(lexer);
+        }
+        return false;
+    }
+    if (iswalpha(lexer->lookahead) || lexer->lookahead == '_') {
+        while (iswalnum(lexer->lookahead) || lexer->lookahead == '_') {
+            advance(lexer);
+        }
+        skip_trivia(lexer);
+        if (lexer->lookahead != '.') {
+            return false;
+        }
+        advance(lexer);
+        skip_trivia(lexer);
+        return lexer->lookahead == '(';
+    }
+    return false;
+}
+
+// Verify that `context` (already consumed, token end marked) opens a context-parameters
+// clause: a parenthesized list followed by a declaration keyword (declaration token) or by
+// a function-type tail / anonymous `fun` (type token). Returns the token to emit, or -1.
+static int verify_context_clause(TSLexer *lexer, bool decl_valid, bool type_valid) {
+    skip_trivia(lexer);
+    if (lexer->lookahead != '(' || !scan_balanced_parens(lexer, 4096)) {
+        return -1;
+    }
+    skip_trivia(lexer);
+    switch (lexer->lookahead) {
+        case 'f':
+            if (!scan_word_at(lexer, "fun")) {
+                return -1;
+            }
+            if (type_valid && scan_anonymous_fun_tail(lexer)) {
+                return CONTEXT_TYPE_KW;
+            }
+            return decl_valid ? CONTEXT_KW : -1;
+        case 'v':
+            if (!decl_valid) {
+                return -1;
+            }
+            return (scan_word_at(lexer, "val") || scan_word_at(lexer, "var")) ? CONTEXT_KW : -1;
+        case '(': {
+            if (!type_valid || !scan_balanced_parens(lexer, 1024)) {
+                return -1;
+            }
+            skip_trivia(lexer);
+            return lexer->lookahead == '-' ? CONTEXT_TYPE_KW : -1;
+        }
+        default: {
+            if (!type_valid || !(iswalpha(lexer->lookahead) || lexer->lookahead == '_')) {
+                return -1;
+            }
+            // Possible receiver type of a function type: `context(A) B.C.() -> R`
+            while (iswalnum(lexer->lookahead) || lexer->lookahead == '_' || lexer->lookahead == '.') {
+                advance(lexer);
+            }
+            if (lexer->lookahead != '(' || !scan_balanced_parens(lexer, 1024)) {
+                return -1;
+            }
+            skip_trivia(lexer);
+            return lexer->lookahead == '-' ? CONTEXT_TYPE_KW : -1;
+        }
+    }
+}
+
+// Lookahead check for `<` starting call-site type arguments: scan to the matching `>`
+// (tracking nesting and `->` arrows in function types) and require `(` or `{` next.
+// The token itself is only the `<`; everything past it is pure lookahead.
+static bool scan_generic_lt(TSLexer *lexer) {
+    advance(lexer); // consume `<`
+    lexer->mark_end(lexer);
+
+    unsigned depth = 1;
+    unsigned scanned = 0;
+    while (!lexer->eof(lexer) && scanned++ < 4096) {
+        int32_t c = lexer->lookahead;
+        if (c == '<') {
+            depth++;
+            advance(lexer);
+            continue;
+        }
+        if (c == '-') {
+            advance(lexer);
+            if (lexer->lookahead == '>') {
+                advance(lexer); // `->` inside a function type is not a closing bracket
+            }
+            continue;
+        }
+        if (c == '>') {
+            depth--;
+            advance(lexer);
+            if (depth == 0) {
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    skip(lexer);
+                }
+                return lexer->lookahead == '(' || lexer->lookahead == '{';
+            }
+            continue;
+        }
+        if (iswalnum(c) || c == '_' || c == '.' || c == ',' || c == '?' || c == '*' ||
+            c == '(' || c == ')' || c == ':' || c == '@' || c == '[' || c == ']' ||
+            iswspace(c)) {
+            advance(lexer);
+            continue;
+        }
+        return false;
+    }
+    return false;
+}
 
 static bool scan_word(TSLexer *lexer, const char *const word) {
     for (uint8_t i = 0; word[i] != '\0'; i++) {
@@ -70,6 +286,47 @@ unsigned tree_sitter_kotlin_external_scanner_serialize(void *payload, char *buff
 void tree_sitter_kotlin_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {}
 
 bool tree_sitter_kotlin_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
+    // `context` clauses are only recognized where a semicolon cannot intervene (statement
+    // starts after an inserted semi, type positions, file start). Skip leading whitespace —
+    // the scanner runs before extras are skipped — then verify the full clause shape.
+    bool context_decl = valid_symbols[CONTEXT_KW];
+    bool context_type = valid_symbols[CONTEXT_TYPE_KW];
+    if ((context_decl || context_type) && !valid_symbols[SEMI] && !valid_symbols[CLASS_MEMBER_SEMI]) {
+        while (iswspace(lexer->lookahead)) {
+            advance(lexer);
+        }
+        bool matches = lexer->lookahead == 'c';
+        if (matches) {
+            const char *word = "context";
+            for (uint8_t i = 0; word[i] != '\0' && matches; i++) {
+                if (lexer->lookahead != word[i]) {
+                    matches = false;
+                }
+                advance(lexer);
+            }
+        }
+        if (matches && !iswalnum(lexer->lookahead) && lexer->lookahead != '_') {
+            lexer->mark_end(lexer);
+            int token = verify_context_clause(lexer, context_decl, context_type);
+            if (token >= 0) {
+                lexer->result_symbol = token;
+                return true;
+            }
+        }
+        // Not a context clause: fall through so the other external tokens (`!is`, comments,
+        // generic `<`, ...) are still considered. If none match, the false return resets the
+        // lexer and the internal lexer produces an identifier.
+    }
+
+    if (valid_symbols[GENERIC_LT] && lexer->lookahead == '<') {
+        if (scan_generic_lt(lexer)) {
+            lexer->result_symbol = GENERIC_LT;
+            return true;
+        }
+        // A `<` that does not open call-site type arguments is the comparison operator; let
+        // the internal lexer take it. Returning false resets the lexer to this position.
+        return false;
+    }
     if (valid_symbols[MULTILINE_STRING_CONTENT]) {
         bool did_advance = false;
         lexer->result_symbol = MULTILINE_STRING_CONTENT;

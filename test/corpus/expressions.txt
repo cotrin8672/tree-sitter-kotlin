@@ -547,3 +547,146 @@ x as Baz.Quux
     (user_type
       (identifier)
       (identifier))))
+
+==========================
+Generic calls with value arguments
+==========================
+
+val a = wrap<User>(User())
+val c = json.decode<User>("x")
+val d = foo<Map<String, List<Int>>>(x)
+val e = foo<(Int) -> String>(x)
+val f = foo<T> { it }
+val g = foo<out Any?>(x)
+
+---
+
+(source_file
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (identifier)
+      (type_arguments
+        (type_projection
+          (user_type
+            (identifier))))
+      (value_arguments
+        (value_argument
+          (call_expression
+            (identifier)
+            (value_arguments))))))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (navigation_expression
+        (identifier)
+        (identifier))
+      (type_arguments
+        (type_projection
+          (user_type
+            (identifier))))
+      (value_arguments
+        (value_argument
+          (string_literal
+            (string_content))))))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (identifier)
+      (type_arguments
+        (type_projection
+          (user_type
+            (identifier)
+            (type_arguments
+              (type_projection
+                (user_type
+                  (identifier)))
+              (type_projection
+                (user_type
+                  (identifier)
+                  (type_arguments
+                    (type_projection
+                      (user_type
+                        (identifier))))))))))
+      (value_arguments
+        (value_argument
+          (identifier)))))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (identifier)
+      (type_arguments
+        (type_projection
+          (function_type
+            (function_type_parameters
+              (user_type
+                (identifier)))
+            (user_type
+              (identifier)))))
+      (value_arguments
+        (value_argument
+          (identifier)))))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (identifier)
+      (type_arguments
+        (type_projection
+          (user_type
+            (identifier))))
+      (annotated_lambda
+        (lambda_literal
+          (identifier)))))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (call_expression
+      (identifier)
+      (type_arguments
+        (type_projection
+          (variance_modifier)
+          (nullable_type
+            (user_type
+              (identifier)))))
+      (value_arguments
+        (value_argument
+          (identifier))))))
+
+==========================
+Comparison operators are not generic calls
+==========================
+
+val h = a < b
+val i = a > b
+val j = a < b && b > c
+
+---
+
+(source_file
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (binary_expression
+      left: (identifier)
+      right: (identifier)))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (binary_expression
+      left: (identifier)
+      right: (identifier)))
+  (property_declaration
+    (variable_declaration
+      (identifier))
+    (binary_expression
+      left: (binary_expression
+        left: (identifier)
+        right: (identifier))
+      right: (binary_expression
+        left: (identifier)
+        right: (identifier)))))

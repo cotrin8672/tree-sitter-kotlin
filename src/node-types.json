@@ -325,6 +325,10 @@
       "required": true,
       "types": [
         {
+          "type": "context_parameters",
+          "named": true
+        },
+        {
           "type": "function_body",
           "named": true
         },
@@ -847,6 +851,25 @@
     }
   },
   {
+    "type": "context_parameters",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "parameter",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "delegation_specifier",
     "named": true,
     "fields": {},
@@ -1095,6 +1118,10 @@
       "required": true,
       "types": [
         {
+          "type": "context_parameters",
+          "named": true
+        },
+        {
           "type": "function_body",
           "named": true
         },
@@ -1138,6 +1165,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "context_parameters",
+          "named": true
+        },
         {
           "type": "function_type_parameters",
           "named": true
@@ -1754,6 +1785,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "context_parameters",
+          "named": true
+        },
         {
           "type": "expression",
           "named": true
@@ -2770,7 +2805,8 @@
   },
   {
     "type": "block_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "by",
@@ -2922,7 +2958,8 @@
   },
   {
     "type": "line_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "noinline",
