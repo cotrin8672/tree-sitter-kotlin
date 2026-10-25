@@ -450,11 +450,13 @@ bool tree_sitter_kotlin_external_scanner_scan(void *payload, TSLexer *lexer, con
             case '=':
             case '{':
             case '[':
-            case '(':
             case '|':
             case '&':
             case '/':
                 return false;
+            // Only a primary constructor can continue with parentheses after a newline.
+            case '(':
+                return !valid_symbols[CONSTRUCTOR];
             // Insert a semicolon before `--` and `++`, but not before binary `+` or `-`.
             // Insert before +/-{float}
             case '+':

@@ -384,3 +384,171 @@ fun after() {}
     (function_value_parameters)
     (function_body
       (block))))
+
+========================================================================
+Parenthesized statement after initializer newline
+========================================================================
+
+fun use(a: Int, b: Int) {
+val sum = a + b
+(a + b).onlyInt()
+sum.onlyInt()
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (function_value_parameters
+      (parameter
+        (identifier)
+        (user_type
+          (identifier)))
+      (parameter
+        (identifier)
+        (user_type
+          (identifier))))
+    (function_body
+      (block
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (binary_expression
+            (identifier)
+            (identifier)))
+        (call_expression
+          (navigation_expression
+            (parenthesized_expression
+              (binary_expression
+                (identifier)
+                (identifier)))
+            (identifier))
+          (value_arguments))
+        (call_expression
+          (navigation_expression
+            (identifier)
+            (identifier))
+          (value_arguments))))))
+
+========================================================================
+Primary constructor and expression continuation newline controls
+========================================================================
+
+class NewlineConstructor
+    (val n: Int)
+fun use(a: Int, b: Int) {
+    val sum = a + b
+    (a + b).inc()
+    val call = maxOf(
+        (a + b),
+        1
+    )
+    val continued = a +
+        (b)
+    val chain = a.toString()
+        .length
+    val lambda = listOf(1)
+        .map { it + 1 }
+    println(sum + call + continued + chain + lambda.size)
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (primary_constructor
+      (class_parameters
+        (class_parameter
+          (identifier)
+          (user_type
+            (identifier))))))
+  (function_declaration
+    (identifier)
+    (function_value_parameters
+      (parameter
+        (identifier)
+        (user_type
+          (identifier)))
+      (parameter
+        (identifier)
+        (user_type
+          (identifier))))
+    (function_body
+      (block
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (binary_expression
+            (identifier)
+            (identifier)))
+        (call_expression
+          (navigation_expression
+            (parenthesized_expression
+              (binary_expression
+                (identifier)
+                (identifier)))
+            (identifier))
+          (value_arguments))
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (call_expression
+            (identifier)
+            (value_arguments
+              (value_argument
+                (parenthesized_expression
+                  (binary_expression
+                    (identifier)
+                    (identifier))))
+              (value_argument
+                (number_literal)))))
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (binary_expression
+            (identifier)
+            (parenthesized_expression
+              (identifier))))
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (navigation_expression
+            (call_expression
+              (navigation_expression
+                (identifier)
+                (identifier))
+              (value_arguments))
+            (identifier)))
+        (property_declaration
+          (variable_declaration
+            (identifier))
+          (call_expression
+            (navigation_expression
+              (call_expression
+                (identifier)
+                (value_arguments
+                  (value_argument
+                    (number_literal))))
+              (identifier))
+            (annotated_lambda
+              (lambda_literal
+                (binary_expression
+                  (identifier)
+                  (number_literal))))))
+        (call_expression
+          (identifier)
+          (value_arguments
+            (value_argument
+              (binary_expression
+                (binary_expression
+                  (binary_expression
+                    (binary_expression
+                      (identifier)
+                      (identifier))
+                    (identifier))
+                  (identifier))
+                (navigation_expression
+                  (identifier)
+                  (identifier))))))))))
